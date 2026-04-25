@@ -1,0 +1,26 @@
+# --- Web Backend & API ---
+fastapi
+uvicorn
+pydantic
+httpx
+
+# --- Agentic AI Framework ---
+langchain
+langchain-core
+
+# --- The "Ears" & Crawlers ---
+feedparser
+praw
+yt-dlp
+
+# --- Task Scheduling (Background Jobs) ---
+celery
+redis
+
+# --- Computer Vision & Math ---
+transformers
+opencv-python-headless
+Pillow
+
+# --- Vector Database ---
+pinecone-client
