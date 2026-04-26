@@ -1,9 +1,12 @@
 import boto3
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 s3 = boto3.client('s3')
 
-BUCKET = "digital-asset-protection"
-KEY = "suspect.mp4"
+BUCKET = os.getenv("BUCKET_NAME")
+KEY = "batch1_suspect.mp4" # change the video name accordingly
 
 def update_metadata():
     # Step 1: Get existing metadata

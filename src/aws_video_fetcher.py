@@ -2,10 +2,12 @@ import os
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
+from dotenv import load_dotenv
 
+load_dotenv()
 # --- Configuration ---
-BUCKET_NAME = "digital-asset-protection"  # Just the name, not the full URL
-DOWNLOAD_DIR = "aws_videos"
+BUCKET_NAME = os.getenv("BUCKET_NAME")  # Just the name, not the full URL
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR")
 ALLOWED_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv")
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)

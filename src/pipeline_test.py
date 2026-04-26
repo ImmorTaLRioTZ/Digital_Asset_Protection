@@ -1,7 +1,7 @@
 from pathlib import Path
 from src.pipeline.pipeline import DetectionPipeline, PipelineConfig
 
-def main():
+def test():
 
     # Initialize configuration, pointing to where your SSCD model weights are/will be saved
     config = PipelineConfig(sscd_model_dir=Path("models/"))
@@ -21,5 +21,4 @@ def main():
 
     print(result)
 
-if __name__ == "__main__":
-    main()
+test()
