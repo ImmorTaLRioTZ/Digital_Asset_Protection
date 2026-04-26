@@ -1,6 +1,7 @@
 import OfficialAssetUploader from './components/OfficialAssetUploader';
 import SuspectVideoUploader from './components/SuspectVideoUploader';
 import './App.css';
+import BucketViewer from './components/BucketViewer';
 
 function App() {
   return (
@@ -16,6 +17,9 @@ function App() {
         
         {/* Right Side: The Sword (Suspect Ingestion) */}
         <SuspectVideoUploader />
+        <section className="dashboard-monitor">
+          <BucketViewer/>
+        </section>
       </main>
     </div>
   );

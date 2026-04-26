@@ -40,30 +40,9 @@ from pipeline.sscd_downloader import ensure_sscd_model_exists
 
 logger = logging.getLogger(__name__)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Data structures
-# ─────────────────────────────────────────────────────────────────────────────
-
-@dataclass
-class VideoFingerprint:
-    """SSCD embedding fingerprint for one official reference video."""
-    asset_id: str
-    vectors: torch.Tensor          # (N, D) float32 on CPU — L2-normalised
-    fps_interval: float            # seconds between sampled frames
-    frame_count: int               # number of embedding vectors stored
-    duration_seconds: float
-
-
-@dataclass
-class SSCDResult:
-    matched: bool
-    asset_id: Optional[str] = None
-    best_score: float = 0.0        # mean cosine similarity of best window (0–1)
-    best_timestamp_seconds: int = -1  # start second of the matching window
-    reason: str = ""
-
-
+HIGH_SIM_THRESHOLD = 0.90
+CONSISTENCY_RATIO = 0.7
+MEAN_THRESHOLD = 0.85
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +53,43 @@ IMAGENET_STD      = [0.229, 0.224, 0.225]
 DEFAULT_THRESHOLD = 0.90          # cosine similarity ≥ this → confirmed match
 FPS_INTERVAL      = 1.0           # sample one frame per second by default
 VRAM_OVERHEAD_MB  = 1_800         # ~1.5 GB reserved for model weights + driver
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data structures
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass
+class VideoFingerprint:
+    """SSCD embedding fingerprint for one official reference video."""
+    asset_id: str
+    vectors_rgb: torch.Tensor          # (N, D) float32 on CPU — L2-normalised
+    vectors_bw: torch.Tensor           # (N, D) float32 on CPU — L2-normalised
+    fps_interval: float            
+    frame_count: int               
+    duration_seconds: float
+
+# --- Dual Preprocessors ---
+_preprocess_rgb = transforms.Compose([
+    transforms.Resize([SSCD_INPUT_SIZE, SSCD_INPUT_SIZE]),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+])
+
+_preprocess_bw = transforms.Compose([
+    transforms.Resize([SSCD_INPUT_SIZE, SSCD_INPUT_SIZE]),
+    transforms.Grayscale(num_output_channels=3), # B&W structure
+    transforms.ToTensor(),
+    transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+])
+
+
+@dataclass
+class SSCDResult:
+    matched: bool
+    asset_id: Optional[str] = None
+    best_score: float = 0.0        # mean cosine similarity of best window (0–1)
+    best_timestamp_seconds: int = -1  # start second of the matching window
+    reason: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -180,11 +196,9 @@ def _encode_frames(
     device:     str,
     batch_size: int,
     use_fp16:   bool,
+    preprocess_fn: transforms.Compose  # ⬅️ NEW ARGUMENT
 ) -> torch.Tensor:
-    """
-    Encode PIL frames → L2-normalised SSCD embeddings (float32, CPU).
-    Moves results off the GPU after every batch to minimise peak VRAM usage.
-    """
+    """Encode PIL frames → L2-normalised SSCD embeddings."""
     dtype     = torch.float16 if (use_fp16 and device == "cuda") else torch.float32
     batches   = range(0, len(frames), batch_size)
     iterator  = tqdm(batches, desc="  encoding", unit="batch") if _TQDM else batches
@@ -192,59 +206,57 @@ def _encode_frames(
 
     for i in iterator:
         batch   = frames[i : i + batch_size]
-        tensors = torch.stack([_preprocess(f) for f in batch]).to(device=device, dtype=dtype)
+        # ⬅️ Apply the specific preprocessor passed in
+        tensors = torch.stack([preprocess_fn(f) for f in batch]).to(device=device, dtype=dtype)
         vecs    = model(tensors)
-        vecs    = F.normalize(vecs.float(), p=2, dim=1)   # fp32 for stable norm
+        vecs    = F.normalize(vecs.float(), p=2, dim=1) 
         collected.append(vecs.cpu())
         del tensors, vecs
         if device == "cuda":
             torch.cuda.empty_cache()
 
-    return torch.cat(collected, dim=0)   # (N, D) float32 on CPU
+    return torch.cat(collected, dim=0)
 
 
-def _sliding_window_search(
-    ref_vectors:     torch.Tensor,   # (N, D) — official reference
-    suspect_vectors: torch.Tensor,   # (M, D) — clip under investigation
-    threshold:       float,
-) -> Tuple[float, int]:
-    """
-    Vectorised sliding-window cosine similarity via grouped conv1d.
-
-    Since all vectors are L2-normalised, dot(a, b) == cosine_sim(a, b).
-    We rewrite the per-window mean dot product as a 1-D grouped convolution:
-
-        signal = ref.T        → (1, D, N)
-        kernel = suspect.T    → (D, 1, M)   (D independent filters)
-
-    F.conv1d(groups=D) produces (1, D, N−M+1) in one fused CUDA/C++ call.
-    Summing over D and dividing by M gives the mean cosine similarity for
-    every window — no Python loop over windows.
-    """
+def _sliding_window_search(ref_vectors, suspect_vectors):
     N, D = ref_vectors.shape
-    M    = suspect_vectors.shape[0]
+    M = suspect_vectors.shape[0]
 
     if M == 0 or N == 0:
-        logger.error("Empty vector sequence — aborting search.")
-        return 0.0, -1
-    if M > N:
-        logger.error(
-            "Suspect clip (%d frames) is longer than reference (%d frames). "
-            "Match is impossible.", M, N
-        )
-        return 0.0, -1
+        return 0.0, -1, torch.empty(0)
 
-    logger.info("Sliding-window: %d windows × %d-frame clip inside %d-frame reference …",
-                N - M + 1, M, N)
+    # Calculate the full similarity matrix once
+    sim_matrix = torch.matmul(ref_vectors, suspect_vectors.T)
 
-    signal       = ref_vectors.T.unsqueeze(0).float()        # (1, D, N)
-    kernel       = suspect_vectors.T.unsqueeze(1).float()    # (D, 1, M)
-    conv_out     = F.conv1d(signal, kernel, groups=D)        # (1, D, N-M+1)
-    window_scores = conv_out.squeeze(0).sum(dim=0) / M       # (N-M+1,)
+    best_score = -1.0
+    best_idx = -1
+    best_sim_vec = None
 
-    best_score_t, best_idx_t = window_scores.max(dim=0)
-    return best_score_t.item(), best_idx_t.item()
+    # Case 1: Suspect is a short clip taken from a long Reference
+    if M <= N:
+        for i in range(N - M + 1):
+            # Extract the diagonal representing a 1:1 frame match over time
+            diag = sim_matrix[range(i, i + M), range(M)]
+            mean_score = diag.mean().item()
 
+            if mean_score > best_score:
+                best_score = mean_score
+                best_idx = i
+                best_sim_vec = diag
+
+    # Case 2: Reference is embedded inside a long Suspect compilation
+    else:
+        for j in range(M - N + 1):
+            # Slide the reference across the suspect matrix
+            diag = sim_matrix[range(N), range(j, j + N)]
+            mean_score = diag.mean().item()
+
+            if mean_score > best_score:
+                best_score = mean_score
+                best_idx = j # Note: This index now refers to the timestamp in the suspect video
+                best_sim_vec = diag
+
+    return best_score, best_idx, best_sim_vec
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
@@ -274,9 +286,13 @@ def build_fingerprint(
     if not frames:
         raise RuntimeError(f"No usable frames extracted from: {path}")
 
-    vectors = _encode_frames(frames, model, device, batch, use_fp16)
+    logger.info("   -> Generating RGB embeddings...")
+    vectors_rgb = _encode_frames(frames, model, device, batch, use_fp16, _preprocess_rgb)
+    
+    logger.info("   -> Generating B&W embeddings...")
+    vectors_bw = _encode_frames(frames, model, device, batch, use_fp16, _preprocess_bw)
 
-    # Free model immediately — embedding generation is done
+    # Free model immediately
     del model, frames
     gc.collect()
     if device == "cuda":
@@ -291,14 +307,16 @@ def build_fingerprint(
 
     fp = VideoFingerprint(
         asset_id=asset_id,
-        vectors=vectors,
+        vectors_rgb=vectors_rgb,   # ⬅️ Save RGB
+        vectors_bw=vectors_bw,     # ⬅️ Save B&W
         fps_interval=fps_interval,
-        frame_count=vectors.shape[0],
+        frame_count=vectors_rgb.shape[0],
         duration_seconds=dur,
     )
+
     logger.info(
-        "[Stage 3] Built SSCD fingerprint for '%s': %d vectors, dim=%d",
-        asset_id, fp.frame_count, vectors.shape[1],
+        "[Stage 3] Built SSCD fingerprint for '%s': %d vectors, vector_rgb dim=%d  vector_bw dim=%d",
+        asset_id, fp.frame_count, vectors_rgb.shape[1], vectors_bw.shape[1]
     )
     return fp
 
@@ -346,39 +364,57 @@ def check_video(
         return SSCDResult(matched=False, reason="No usable frames extracted from suspect video")
 
     try:
-        suspect_vectors = _encode_frames(frames, model, device, batch, use_fp16)
+        logger.info("   -> Encoding Suspect in RGB...")
+        suspect_rgb = _encode_frames(frames, model, device, batch, use_fp16, _preprocess_rgb)
+        
+        logger.info("   -> Encoding Suspect in B&W...")
+        suspect_bw = _encode_frames(frames, model, device, batch, use_fp16, _preprocess_bw)
     except Exception as exc:
         return SSCDResult(matched=False, reason=f"Encoding failed: {exc}")
     finally:
-        # Always unload model before the search phase
         del model, frames
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
-        logger.info("[Stage 3] Model unloaded. Running search on CPU …")
 
-    # ── Sliding-window search against every reference fingerprint ─────────────
     best_result = SSCDResult(matched=False, reason="No match found in SSCD database")
 
+    # ── Dual Sliding-window search ─────────────
     for fp in database:
-        score, best_idx = _sliding_window_search(fp.vectors, suspect_vectors, threshold)
+        # Check RGB
+        score_rgb, idx_rgb, vec_rgb = _sliding_window_search(fp.vectors_rgb, suspect_rgb)
+        # Check B&W
+        score_bw, idx_bw, vec_bw = _sliding_window_search(fp.vectors_bw, suspect_bw)
 
-        logger.debug(
-            "  vs '%s': best_score=%.4f at window=%d (threshold=%.2f)",
-            fp.asset_id, score, best_idx, threshold,
-        )
+        if idx_rgb == -1 or idx_bw == -1:
+            continue
 
-        if score >= threshold and score > best_result.best_score:
-            best_result = SSCDResult(
-                matched=True,
-                asset_id=fp.asset_id,
-                best_score=score,
-                best_timestamp_seconds=best_idx,  # 1 frame/s → frame index == second
-                reason=(
-                    f"SSCD matched '{fp.asset_id}' with cosine similarity {score:.4f} "
-                    f"(threshold={threshold}) at ~{best_idx}s into reference"
-                ),
-            )
+        cons_rgb = (vec_rgb > HIGH_SIM_THRESHOLD).float().mean().item()
+        cons_bw = (vec_bw > HIGH_SIM_THRESHOLD).float().mean().item()
+
+        # Did it pass the individual thresholds?
+        rgb_passed = (score_rgb >= MEAN_THRESHOLD and cons_rgb >= CONSISTENCY_RATIO)
+        bw_passed = (score_bw >= MEAN_THRESHOLD and cons_bw >= CONSISTENCY_RATIO)
+
+        # =========================================================
+        # THE LOGIC GATE: Change 'and' to 'or' here if you want 
+        # to make the pipeline harder for pirates to evade!
+        # =========================================================
+        if rgb_passed and bw_passed:
+            
+            avg_score = (score_rgb + score_bw) / 2.0
+            
+            if avg_score > best_result.best_score:
+                best_result = SSCDResult(
+                    matched=True,
+                    asset_id=fp.asset_id,
+                    best_score=avg_score,
+                    best_timestamp_seconds=int(idx_rgb * fp.fps_interval),
+                    reason=(
+                        f"SSCD matched '{fp.asset_id}' | "
+                        f"RGB_score={score_rgb:.2f}, BW_score={score_bw:.2f}"
+                    ),
+                )
 
     if best_result.matched:
         logger.info("[Stage 3] ✓ MATCH — %s", best_result.reason)

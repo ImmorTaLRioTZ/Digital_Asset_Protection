@@ -146,6 +146,21 @@ def poll_suspects(pipeline: DetectionPipeline):
                     print(f"      Caught via: {result.detected_by}")
                     print(f"      Confidence: {result.confidence}")
 
+                    print(f"   🏷️ Tagging S3 file as DMCA Struck...")
+                    new_metadata = {
+                        **metadata,  # Keep all existing tags (like email and uploader)
+                        'dmca-struck': 'true'
+                    }
+
+                    s3_client.copy_object(
+                        Bucket=BUCKET_NAME,
+                        Key=key,
+                        CopySource={'Bucket': BUCKET_NAME, 'Key': key},
+                        Metadata=new_metadata,
+                        MetadataDirective='REPLACE',
+                        ContentType=head.get('ContentType', 'video/mp4')
+                    )
+
                     send_dmca_notice(
                         target_email=suspect_email, 
                         filename=key, 

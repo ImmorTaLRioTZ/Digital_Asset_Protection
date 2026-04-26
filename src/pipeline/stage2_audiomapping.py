@@ -42,7 +42,7 @@ TOP_PEAKS_PER_FRAME = 3       # strongest peaks per time slice kept as landmarks
 FAN_OUT             = 5       # each peak paired with next FAN_OUT peaks → hash
 MIN_OFFSET          = 1       # minimum time-frame gap between paired peaks
 MAX_OFFSET          = 50      # maximum time-frame gap between paired peaks
-VOTE_THRESHOLD      = 5       # minimum landmark votes to confirm a match
+VOTE_THRESHOLD      = 1500       # minimum landmark votes to confirm a match
 
 
 # ─────────────────────────────────────────────────────────────────────────────

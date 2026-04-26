@@ -192,6 +192,49 @@ def upload_suspect_video(
         print(f"❌ Upload failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload to S3")
 
+@app.get("/api/videos")
+def get_all_videos():
+    """Returns a JSON list of all videos and their metadata with debug logging."""
+    print("📡 Frontend requested /api/videos. Fetching from AWS...")
+    video_list = []
+    
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=BUCKET_NAME)
+        
+        for page_num, page in enumerate(pages, 1):
+            contents = page.get("Contents", [])
+            print(f"📄 Scanning S3 Page {page_num}: Found {len(contents)} total objects.")
+            
+            for obj in contents:
+                key = obj["Key"]
+                
+                if key.lower().endswith(ALLOWED_EXTENSIONS):
+                    print(f"   🔍 Fetching metadata for: {key}")
+                    
+                    head = s3_client.head_object(Bucket=BUCKET_NAME, Key=key)
+                    metadata = head.get("Metadata", {})
+                    
+                    video_list.append({
+                        "id": key,
+                        "filename": key,
+                        "uploader_name": metadata.get("uploader-name", "Unknown"),
+                        "asset_type": metadata.get("asset-type", "suspect"),
+                        "is_dmca_struck": metadata.get("dmca-struck", "false").lower() == "true",
+                        "url": f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{key}",
+                        "date": obj['LastModified'].strftime("%b %d, %Y - %H:%M")
+                    })
+                    
+        print(f"✅ Successfully prepared {len(video_list)} videos for the frontend.")
+        return {"videos": video_list}
+        
+    except Exception as e:
+        print(f"❌ FATAL ERROR in get_all_videos: {str(e)}")
+        # Print the full error traceback to the terminal
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     # Runs the simulated feed on localhost:8000
