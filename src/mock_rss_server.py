@@ -107,7 +107,8 @@ def get_rss_feed():
 def upload_official_video(
     file: UploadFile = File(...),
     asset_id: str = Form(...),          # Now we ask for a specific ID (e.g., "movie_001")
-    uploader_name: str = Form(...)
+    uploader_name: str = Form(...),
+    uploader_email: str = Form(...)
 ):
     """Receives an OFFICIAL video from the frontend and uploads it to S3."""
     
@@ -128,6 +129,7 @@ def upload_official_video(
                 'Metadata': {
                     'asset-id': asset_id,
                     'uploader-name': uploader_name,
+                    'uploader-email': uploader_email,
                     'asset-type': 'official-reference' # Tag it clearly
                 }
             }
@@ -137,6 +139,51 @@ def upload_official_video(
         return {
             "message": "Official Asset Registered", 
             "asset_id": asset_id,
+            "filename": safe_filename, 
+            "url": public_url
+        }
+
+    except Exception as e:
+        print(f"❌ Upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload to S3")
+
+@app.post("/upload-suspect")
+def upload_suspect_video(
+    file: UploadFile = File(...),
+    uploader_name: str = Form(...),
+    uploader_email: str = Form(...),
+    upload_source: str = Form("web-frontend")
+):
+    """Receives a video from the frontend and uploads it to S3 with metadata."""
+    
+    # 1. Validate the file type
+    if not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Invalid file type. Must be a video.")
+
+    # 2. Generate a unique safe filename
+    safe_filename = f"suspect_{uuid.uuid4().hex[:8]}_{file.filename}"
+
+    try:
+        # 3. Stream the upload directly to S3
+        print(f"⬆️ Uploading {safe_filename} to S3...")
+        s3_client.upload_fileobj(
+            file.file,
+            BUCKET_NAME,
+            safe_filename,
+            ExtraArgs={
+                'ContentType': file.content_type or 'video/mp4',
+                'Metadata': {
+                    'uploader-name': uploader_name,
+                    'uploader-email': uploader_email,
+                    'upload-source': upload_source
+                }
+            }
+        )
+        
+        # 4. Return the new public URL
+        public_url = f"https://{BUCKET_NAME}.s3.{REGION}.amazonaws.com/{safe_filename}"
+        return {
+            "message": "Upload successful", 
             "filename": safe_filename, 
             "url": public_url
         }

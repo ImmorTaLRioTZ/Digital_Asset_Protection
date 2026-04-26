@@ -27,9 +27,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import src.pipeline.stage1_phash as phash_stage
-import src.pipeline.stage2_audiomapping as audio_stage
-import src.pipeline.stage3_sscd  as sscd_stage
+import pipeline.stage1_phash as phash_stage
+import pipeline.stage2_audiomapping as audio_stage
+import pipeline.stage3_sscd  as sscd_stage
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(

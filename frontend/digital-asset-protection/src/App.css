@@ -1,0 +1,162 @@
+/* Base Dashboard Layout */
+.dashboard-container {
+  min-height: 100vh;
+  background-color: #f4f7f6;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #333;
+}
+
+.dashboard-header {
+  background-color: #1a1a2e;
+  color: #fff;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.dashboard-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #a0a0b5;
+  font-size: 1.1rem;
+}
+
+.dashboard-main {
+  display: flex;
+  justify-content: center;
+  padding: 3rem 1rem;
+}
+
+/* Uploader Card Styles */
+.uploader-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  width: 100%;
+  max-width: 500px;
+  padding: 2.5rem;
+}
+
+.uploader-header h2 {
+  margin-top: 0;
+  color: #2c3e50;
+  font-size: 1.5rem;
+}
+
+.uploader-header p {
+  color: #6c757d;
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.uploader-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.form-group input[type="text"] {
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.form-group input[type="text"]:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.file-input {
+  padding: 0.5rem 0;
+}
+
+/* Button Styles */
+.submit-btn {
+  margin-top: 1rem;
+  background-color: #0056b3;
+  color: white;
+  border: none;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: #004494;
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.submit-btn:disabled {
+  background-color: #a0c4e8;
+  cursor: not-allowed;
+}
+
+/* Status Messages */
+.status-message {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.status-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Layout Update for Dual Cards */
+.dashboard-main {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2rem;
+  padding: 3rem 2rem;
+  flex-wrap: wrap; /* Stacks on mobile */
+}
+
+/* Suspect Card Specific Styling */
+.suspect-card {
+  border-top: 5px solid #dc3545;
+}
+
+.suspect-btn {
+  background-color: #dc3545;
+}
+
+.suspect-btn:hover:not(:disabled) {
+  background-color: #bd2130;
+}

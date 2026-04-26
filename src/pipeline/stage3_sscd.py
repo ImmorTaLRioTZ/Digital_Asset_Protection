@@ -36,7 +36,7 @@ try:
 except ImportError:
     _TQDM = False
 
-from src.sscd_downloader import ensure_sscd_model_exists
+from pipeline.sscd_downloader import ensure_sscd_model_exists
 
 logger = logging.getLogger(__name__)
 
