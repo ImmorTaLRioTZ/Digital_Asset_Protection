@@ -7,17 +7,21 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pipeline.pipeline import DetectionPipeline, PipelineConfig
+import threading
+import queue
 
 load_dotenv()
 
 # --- Configuration ---
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 REGION = os.getenv("REGION")
-POLL_INTERVAL_SECONDS = 10
+POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", 10))
 MAILTRAP_SMTP_HOST=os.getenv("MAILTRAP_SMTP_HOST")
 MAILTRAP_SMTP_PORT=int(os.getenv("MAILTRAP_SMTP_PORT"))
 MAILTRAP_SMTP_USER=os.getenv("MAILTRAP_SMTP_USER")
 MAILTRAP_SMTP_PASS=os.getenv("MAILTRAP_SMTP_PASS")
+EMAIL_QUEUE = queue.Queue()
+MAILTRAP_RATE_LIMIT_SECONDS = int(os.getenv("MAILTRAP_RATE_LIMIT_SECONDS", 10))
 
 OFFICIAL_DIR = Path("videos/officials")
 SUSPECT_DIR = Path("videos/incoming")
@@ -76,6 +80,34 @@ Automated Enforcement Division
         print(f"   ✅ Simulated DMCA Notice successfully caught by Mailtrap for {target_email}!")
     except Exception as e:
         print(f"   ❌ Failed to send simulated email: {e}")
+
+
+def email_daemon():
+    """Background thread that processes the email queue asynchronously."""
+    print("   📫 Email Daemon started in the background.")
+    while True:
+        try:
+            # .get() blocks until an item is available in the queue
+            email_data = EMAIL_QUEUE.get()
+            
+            # Unpack the dictionary and send the email
+            send_dmca_notice(
+                target_email=email_data["target_email"],
+                filename=email_data["filename"],
+                matched_asset=email_data["matched_asset"],
+                confidence=email_data["confidence"]
+            )
+            
+            # Mark the task as done
+            EMAIL_QUEUE.task_done()
+            
+            # --- THE RATE LIMITER ---
+            # Sleep to prevent bombarding Mailtrap
+            time.sleep(MAILTRAP_RATE_LIMIT_SECONDS)
+            
+        except Exception as e:
+            print(f"   ❌ Email Daemon encountered an error: {e}")
+
 
 def sync_official_assets(pipeline: DetectionPipeline):
     """Pulls new official reference videos from S3 and registers them."""
@@ -161,12 +193,13 @@ def poll_suspects(pipeline: DetectionPipeline):
                         ContentType=head.get('ContentType', 'video/mp4')
                     )
 
-                    send_dmca_notice(
-                        target_email=suspect_email, 
-                        filename=key, 
-                        matched_asset=result.asset_id,
-                        confidence=str(result.confidence)
-                    )
+                    print(f"   📥 Queuing DMCA Notice for background dispatch...")
+                    EMAIL_QUEUE.put({
+                        "target_email": suspect_email,
+                        "filename": key,
+                        "matched_asset": result.asset_id,
+                        "confidence": str(result.confidence)
+                    })
                 else:
                     print(f"   ✅ CLEAN: Video passed all checks.")
                     
@@ -191,6 +224,8 @@ if __name__ == "__main__":
         sscd_use_fp16=False
     )
     detector = DetectionPipeline(config)
+    email_thread = threading.Thread(target=email_daemon, daemon=True)
+    email_thread.start()
     
     print(f"\n🚀 Starting Continuous Detection Worker. Polling every {POLL_INTERVAL_SECONDS}s.")
     print("Press Ctrl+C to stop.")

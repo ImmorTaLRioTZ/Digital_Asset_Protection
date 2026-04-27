@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import pipeline.stage1_phash as phash_stage
+# import pipeline.stage1_phash as phash_stage
 import pipeline.stage2_audiomapping as audio_stage
 import pipeline.stage3_sscd  as sscd_stage
 
@@ -70,8 +70,8 @@ class PipelineResult:
 @dataclass
 class PipelineConfig:
     # Stage 1 — pHash
-    phash_hamming_threshold: int   = phash_stage.HAMMING_THRESHOLD
-    phash_match_ratio: float       = phash_stage.MATCH_FRAME_RATIO
+    # phash_hamming_threshold: int   = phash_stage.HAMMING_THRESHOLD
+    # phash_match_ratio: float       = phash_stage.MATCH_FRAME_RATIO
 
     # Stage 2 — Audio fingerprinting
     audio_vote_threshold: int      = audio_stage.VOTE_THRESHOLD
@@ -99,7 +99,7 @@ class DetectionPipeline:
 
     def __init__(self, config: Optional[PipelineConfig] = None):
         self.config = config or PipelineConfig()
-        self._phash_db: list[phash_stage.VideoFingerprint] = []
+        # self._phash_db: list[phash_stage.VideoFingerprint] = []
         self._audio_db: list[audio_stage.AudioFingerprint] = []
         self._sscd_db:  list[sscd_stage.VideoFingerprint]  = []
 
@@ -124,8 +124,8 @@ class DetectionPipeline:
         logger.info("Registering asset '%s' from %s …", asset_id, path.name)
 
         # Stage 1 fingerprint
-        pf = phash_stage.build_fingerprint(path, asset_id)
-        self._phash_db.append(pf)
+        # pf = phash_stage.build_fingerprint(path, asset_id)
+        # self._phash_db.append(pf)
 
         # Stage 2 fingerprint
         if not skip_audio:
@@ -144,9 +144,10 @@ class DetectionPipeline:
             self._sscd_db.append(sf)
 
         logger.info(
-            "Asset '%s' registered — pHash: %d  audio: %s  sscd: %s",
+            # "Asset '%s' registered — pHash: %d  audio: %s  sscd: %s",
+            "Asset '%s' registered — audio: %s  sscd: %s",
             asset_id,
-            len(pf.frame_hashes),
+            # len(pf.frame_hashes),
             f"{len(self._audio_db[-1].hashes)} hashes" if not skip_audio else "skipped",
             f"{self._sscd_db[-1].frame_count} vectors"
             if (not skip_sscd and self.config.sscd_model_dir) else "skipped",
@@ -154,9 +155,9 @@ class DetectionPipeline:
 
     # ── Manual fingerprint loaders (for pre-computed / cached fingerprints) ───
 
-    def load_phash_fingerprint(self, fp: phash_stage.VideoFingerprint) -> None:
-        """Add a pre-computed pHash fingerprint (e.g. loaded from DB/cache)."""
-        self._phash_db.append(fp)
+    # def load_phash_fingerprint(self, fp: phash_stage.VideoFingerprint) -> None:
+    #     """Add a pre-computed pHash fingerprint (e.g. loaded from DB/cache)."""
+    #     self._phash_db.append(fp)
 
     def load_audio_fingerprint(self, fp: audio_stage.AudioFingerprint) -> None:
         """Add a pre-computed audio fingerprint (e.g. loaded from DB/cache)."""
@@ -181,23 +182,23 @@ class DetectionPipeline:
         logger.info("Checking: %s", path.name)
 
         # ── Stage 1: pHash ────────────────────────────────────────────────────
-        if self._phash_db:
-            s1 = phash_stage.check_video(
-                path,
-                self._phash_db,
-                hamming_threshold=self.config.phash_hamming_threshold,
-                match_ratio_threshold=self.config.phash_match_ratio,
-            )
-            if s1.matched:
-                return PipelineResult(
-                    is_pirated=True,
-                    asset_id=s1.asset_id,
-                    detected_by="Stage1_pHash",
-                    confidence="high",
-                    detail=s1.reason,
-                )
-        else:
-            logger.warning("pHash database is empty — skipping Stage 1")
+        # if self._phash_db:
+        #     s1 = phash_stage.check_video(
+        #         path,
+        #         self._phash_db,
+        #         hamming_threshold=self.config.phash_hamming_threshold,
+        #         match_ratio_threshold=self.config.phash_match_ratio,
+        #     )
+        #     if s1.matched:
+        #         return PipelineResult(
+        #             is_pirated=True,
+        #             asset_id=s1.asset_id,
+        #             detected_by="Stage1_pHash",
+        #             confidence="high",
+        #             detail=s1.reason,
+        #         )
+        # else:
+        #     logger.warning("pHash database is empty — skipping Stage 1")
 
         # ── Stage 2: Audio fingerprinting ─────────────────────────────────────
         if self._audio_db:
@@ -215,7 +216,7 @@ class DetectionPipeline:
                     detail=s2.reason,
                 )
         else:
-            logger.warning("Audio database is empty — skipping Stage 2")
+            logger.warning("Audio database is empty — skipping Stage 1")
 
         # ── Stage 3: SSCD ─────────────────────────────────────────────────────
         if self._sscd_db and self.config.sscd_model_dir is not None:
@@ -237,7 +238,7 @@ class DetectionPipeline:
                 )
         else:
             logger.info(
-                "[Stage 3] %s — pipeline ends here",
+                "[Stage 2] %s — pipeline ends here",
                 "SSCD database is empty" if not self._sscd_db else "sscd_model_dir not set",
             )
 
@@ -251,12 +252,15 @@ class DetectionPipeline:
 
     @property
     def registered_assets(self) -> list[str]:
-        return [fp.asset_id for fp in self._phash_db]
+        # Gather unique assets from the remaining databases
+        assets = {fp.asset_id for fp in self._audio_db}
+        assets.update(fp.asset_id for fp in self._sscd_db)
+        return list(assets)
 
     def __repr__(self) -> str:
         return (
             f"DetectionPipeline("
-            f"phash_db={len(self._phash_db)}, "
+            # f"phash_db={len(self._phash_db)}, "
             f"audio_db={len(self._audio_db)}, "
             f"sscd_db={len(self._sscd_db)})"
         )
