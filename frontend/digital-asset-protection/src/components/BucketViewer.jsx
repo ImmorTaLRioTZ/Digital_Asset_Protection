@@ -10,7 +10,7 @@ const BucketViewer = () => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       const response = await fetch(`${API_URL}/api/videos`);
       if (!response.ok) throw new Error('Failed to fetch bucket contents');
-      
+
       const data = await response.json();
       setVideos(data.videos);
     } catch (err) {
@@ -40,7 +40,7 @@ const BucketViewer = () => {
       <div className="video-grid">
         {videos.map((vid) => (
           <div key={vid.id} className={`video-card ${vid.is_dmca_struck ? 'dmca-card' : ''} ${vid.asset_type === 'official-reference' ? 'official-card' : ''}`}>
-            
+
             {/* Visual Badges */}
             <div className="badges">
               {vid.asset_type === 'official-reference' && <span className="badge official">Master Reference</span>}
@@ -52,7 +52,7 @@ const BucketViewer = () => {
               <h3 title={vid.filename}>{vid.filename.substring(0, 25)}...</h3>
               <p><strong>Uploader:</strong> {vid.uploader_name}</p>
               <p><strong>Date:</strong> {vid.date}</p>
-              
+
               <a href={vid.url} target="_blank" rel="noreferrer" className="view-link">
                 View Source File ↗
               </a>

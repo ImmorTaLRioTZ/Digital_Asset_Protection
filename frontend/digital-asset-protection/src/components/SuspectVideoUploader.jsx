@@ -15,7 +15,7 @@ const SuspectVideoUploader = () => {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    
+
     if (!file || !uploaderName || !uploaderEmail) {
       setStatus({ message: 'Please provide a file and source name.', type: 'error' });
       return;
@@ -34,14 +34,14 @@ const SuspectVideoUploader = () => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
       const response = await fetch(`${API_URL}/upload-suspect`, {
         method: 'POST',
-        body: formData, 
+        body: formData,
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setStatus({ 
-          message: `🚨 Suspect video deployed to S3 as ${data.filename}. Watch your worker terminal!`, 
+        setStatus({
+          message: `🚨 Suspect video deployed to S3 as ${data.filename}. Watch your worker terminal!`,
           type: 'error' // Using the red 'error' style to make it look like an alert
         });
         setFile(null);
@@ -65,46 +65,46 @@ const SuspectVideoUploader = () => {
         <h2>Inject Suspect Video</h2>
         <p>Upload an unverified video to trigger the SSCD detection pipeline.</p>
       </div>
-      
+
       <form onSubmit={handleUpload} className="uploader-form">
         <div className="form-group">
           <label htmlFor="suspectUploaderName">Simulated Source / Scraper Name</label>
-          <input 
+          <input
             id="suspectUploaderName"
-            type="text" 
-            value={uploaderName} 
-            onChange={(e) => setUploaderName(e.target.value)} 
+            type="text"
+            value={uploaderName}
+            onChange={(e) => setUploaderName(e.target.value)}
             placeholder="e.g., WebScraper_Bot_01"
             required
           />
         </div>
 
         <div className="form-group">
-            <label htmlFor="suspectUploaderEmail">Reporter Email</label>
-            <input 
-                id="suspectUploaderEmail"
-                type="email" 
-                value={uploaderEmail} 
-                onChange={(e) => setUploaderEmail(e.target.value)} 
-                placeholder="bot@scraper-system.net"
-                required
-            />
+          <label htmlFor="suspectUploaderEmail">Reporter Email</label>
+          <input
+            id="suspectUploaderEmail"
+            type="email"
+            value={uploaderEmail}
+            onChange={(e) => setUploaderEmail(e.target.value)}
+            placeholder="bot@scraper-system.net"
+            required
+          />
         </div>
 
         <div className="form-group">
           <label htmlFor="suspect-file-upload">Suspect Video File</label>
-          <input 
+          <input
             id="suspect-file-upload"
-            type="file" 
-            accept="video/mp4,video/quicktime,video/x-matroska" 
-            onChange={handleFileChange} 
+            type="file"
+            accept="video/mp4,video/quicktime,video/x-matroska"
+            onChange={handleFileChange}
             required
             className="file-input"
           />
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={isUploading}
           className={`submit-btn suspect-btn ${isUploading ? 'loading' : ''}`}
         >
