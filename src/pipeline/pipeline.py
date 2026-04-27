@@ -48,7 +48,7 @@ class PipelineResult:
     """Final verdict returned for every checked video."""
     is_pirated: bool
     asset_id: Optional[str]     = None
-    detected_by: Optional[str]  = None   # "Stage1_pHash" | "Stage2_Audio" | "Stage3_SSCD"
+    detected_by: Optional[str]  = None   # "Stage2_Audio" | "Stage3_SSCD"
     confidence: str              = "low"  # "high" | "medium" | "low"
     detail: str                  = ""
 

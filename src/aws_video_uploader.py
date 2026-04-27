@@ -6,7 +6,7 @@ load_dotenv()
 
 BUCKET = os.getenv("BUCKET_NAME")
 
-video_dir = Path("/home/immortalriotz/PYTHON/Digital_Asset_Protection/Digital_Asset_Protection/videos/")
+video_dir = Path("Digital_Asset_Protection/videos/")
 
 video_name = "batch1_suspect.mp4"  # change to your desired file name
 video_object = video_dir / video_name
