@@ -8,7 +8,11 @@ const BucketViewer = () => {
   const fetchVideos = async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-      const response = await fetch(`${API_URL}/api/videos`);
+      const response = await fetch(`${API_URL}/api/videos`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch bucket contents');
 
       const data = await response.json();
