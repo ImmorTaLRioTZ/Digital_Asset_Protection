@@ -24,3 +24,17 @@ Pillow
 
 # --- Vector Database ---
 pinecone-client
+
+asyncpraw
+asyncprawcore
+boto3
+botocore
+google-api-python-client
+ImageHash
+librosa
+numpy
+python-dotenv
+scipy
+torch
+torchvision
+tqdm
