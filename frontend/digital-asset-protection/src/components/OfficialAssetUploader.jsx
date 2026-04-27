@@ -32,8 +32,8 @@ const OfficialAssetUploader = () => {
     formData.append('uploader_email', uploaderEmail)
 
     try {
-      // Ensure this matches your FastAPI port
-      const response = await fetch('http://127.0.0.1:8000/upload-official', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${API_URL}/upload-official`, {
         method: 'POST',
         body: formData, 
       });
