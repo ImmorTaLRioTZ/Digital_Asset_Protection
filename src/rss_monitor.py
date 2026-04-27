@@ -186,7 +186,10 @@ def poll_suspects(pipeline: DetectionPipeline):
 
 if __name__ == "__main__":
     print("⚙️ Initializing Detection Pipeline Engine...")
-    config = PipelineConfig(sscd_model_dir=Path("models/"))
+    config = PipelineConfig(
+        sscd_model_dir=Path("models/"),
+        sscd_use_fp16=False
+    )
     detector = DetectionPipeline(config)
     
     print(f"\n🚀 Starting Continuous Detection Worker. Polling every {POLL_INTERVAL_SECONDS}s.")
